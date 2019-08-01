@@ -34,12 +34,15 @@ class BaseDetector(object):
     self.opt = opt
     self.pause = True
 
+  ###对图像进行前处理
   def pre_process(self, image, scale, meta=None):
     height, width = image.shape[0:2]
+    ###scale后的height和width
     new_height = int(height * scale)
     new_width  = int(width * scale)
     if self.opt.fix_res:
       inp_height, inp_width = self.opt.input_h, self.opt.input_w
+      ###c为中心点
       c = np.array([new_width / 2., new_height / 2.], dtype=np.float32)
       s = max(height, width) * 1.0
     else:
@@ -82,10 +85,12 @@ class BaseDetector(object):
   def run(self, image_or_path_or_tensor, meta=None):
     load_time, pre_time, net_time, dec_time, post_time = 0, 0, 0, 0, 0
     merge_time, tot_time = 0, 0
+    ###实例化debugger对象
     debugger = Debugger(dataset=self.opt.dataset, ipynb=(self.opt.debug==3),
                         theme=self.opt.debugger_theme)
     start_time = time.time()
     pre_processed = False
+    #####isinstance判断前者是否为后者的一个对象
     if isinstance(image_or_path_or_tensor, np.ndarray):
       image = image_or_path_or_tensor
     elif type(image_or_path_or_tensor) == type (''): 
@@ -99,6 +104,7 @@ class BaseDetector(object):
     load_time += (loaded_time - start_time)
     
     detections = []
+    ###对于各种图像的scale循环
     for scale in self.scales:
       scale_start_time = time.time()
       if not pre_processed:

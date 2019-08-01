@@ -68,6 +68,7 @@ class Debugger(object):
     self.world_size = 64
     self.out_size = 384
 
+  ####复制一张图片，可选是否翻转颜色
   def add_img(self, img, img_id='default', revert_color=False):
     if revert_color:
       img = 255 - img
@@ -82,7 +83,8 @@ class Debugger(object):
     cv2.imshow('{}'.format(imgId), self.imgs[imgId])
     if pause:
       cv2.waitKey()
-  
+
+  ###对图像进行某种混合，有两种混合方式，通过trans因子
   def add_blend_img(self, back, fore, img_id='blend', trans=0.7):
     if self.theme == 'white':
       fore = 255 - fore
@@ -118,12 +120,16 @@ class Debugger(object):
     img = img.copy()
     c, h, w = img.shape[0], img.shape[1], img.shape[2]
     if output_res is None:
+      ###
       output_res = (h * self.down_ratio, w * self.down_ratio)
     img = img.transpose(1, 2, 0).reshape(h, w, c, 1).astype(np.float32)
+    ###每个位置处有三个值
     colors = np.array(
       self.colors, dtype=np.float32).reshape(-1, 3)[:c].reshape(1, 1, c, 3)
     if self.theme == 'white':
+      ###对图像处理的 方式
       colors = 255 - colors
+    ###每个像素三通道上取最大值（经过colors变换之后）
     color_map = (img * colors).max(axis=2).astype(np.uint8)
     color_map = cv2.resize(color_map, (output_res[0], output_res[1]))
     return color_map

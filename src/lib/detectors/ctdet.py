@@ -51,7 +51,9 @@ class CtdetDetector(BaseDetector):
       dets[0][j][:, :4] /= scale
     return dets[0]
 
+###核心函数，获取网络输出并进行merge
   def merge_outputs(self, detections):
+    ###detections为网络输出结果，shape为
     results = {}
     for j in range(1, self.num_classes + 1):
       results[j] = np.concatenate(

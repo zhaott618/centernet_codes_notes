@@ -182,11 +182,15 @@ class opts(object):
     self.parser.add_argument('--dense_wh', action='store_true',
                              help='apply weighted regression near center or '
                                   'just apply regression on center point.')
+
+    ####种类特定的bbox size，
     self.parser.add_argument('--cat_spec_wh', action='store_true',
                              help='category specific bounding box size.')
+    ####表示选择是否预测中心点偏移
     self.parser.add_argument('--not_reg_offset', action='store_true',
                              help='not regress local offset.')
     # exdet
+    ###
     self.parser.add_argument('--agnostic_ex', action='store_true',
                              help='use category agnostic extreme points.')
     self.parser.add_argument('--scores_thresh', type=float, default=0.1,
@@ -199,6 +203,7 @@ class opts(object):
     self.parser.add_argument('--dense_hp', action='store_true',
                              help='apply weighted pose regression near center '
                                   'or just apply regression on center point.')
+    ####对于关键点检测分支
     self.parser.add_argument('--not_hm_hp', action='store_true',
                              help='not estimate human joint heatmap, '
                                   'directly use the joint offset from center.')
@@ -246,6 +251,7 @@ class opts(object):
     if opt.head_conv == -1: # init default head_conv
       opt.head_conv = 256 if 'dla' in opt.arch else 64
     opt.pad = 127 if 'hourglass' in opt.arch else 31
+    ####好像是堆叠的卷积模块数
     opt.num_stacks = 2 if opt.arch == 'hourglass' else 1
 
     if opt.trainval:

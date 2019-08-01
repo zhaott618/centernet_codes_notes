@@ -22,17 +22,21 @@ _model_factory = {
 }
 
 def create_model(arch, heads, head_conv):
+  ### 找到对应网络基础架构，包括层数和模型
   num_layers = int(arch[arch.find('_') + 1:]) if '_' in arch else 0
   arch = arch[:arch.find('_')] if '_' in arch else arch
   get_model = _model_factory[arch]
+  ### 构建模型
   model = get_model(num_layers=num_layers, heads=heads, head_conv=head_conv)
   return model
 
 def load_model(model, model_path, optimizer=None, resume=False, 
                lr=None, lr_step=None):
   start_epoch = 0
+  ####从checkpoints加载训练了特定epoch模型和map_location
   checkpoint = torch.load(model_path, map_location=lambda storage, loc: storage)
   print('loaded {}, epoch {}'.format(model_path, checkpoint['epoch']))
+  ####获得state_dict_
   state_dict_ = checkpoint['state_dict']
   state_dict = {}
   

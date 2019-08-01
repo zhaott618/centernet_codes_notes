@@ -12,10 +12,14 @@ def _sigmoid(x):
 def _gather_feat(feat, ind, mask=None):
     dim  = feat.size(2)
     ind  = ind.unsqueeze(2).expand(ind.size(0), ind.size(1), dim)
+    ###对tensor进行某种维度上的gathers，在指定维度上按照索引赋值输出tensor。输入与输出大小一致
+
     feat = feat.gather(1, ind)
     if mask is not None:
+        ###去除所有尺度为1的维度
         mask = mask.unsqueeze(2).expand_as(feat)
         feat = feat[mask]
+        ###feat的shape变为（-1，dim）
         feat = feat.view(-1, dim)
     return feat
 

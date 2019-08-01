@@ -8,7 +8,7 @@ from .utils import _gather_feat, _tranpose_and_gather_feat
 
 def _nms(heat, kernel=3):
     pad = (kernel - 1) // 2
-
+###要做最大池化操作
     hmax = nn.functional.max_pool2d(
         heat, (kernel, kernel), stride=1, padding=pad)
     keep = (hmax == heat).float()
@@ -40,6 +40,7 @@ def _right_aggregate(heat):
         ret[i] += ret[i + 1] * inds.float()
     return (ret - heat).transpose(1, 0).reshape(shape) 
 
+####这是在做类似Corner pooling的操作
 def _top_aggregate(heat):
     '''
         heat: batchsize x channels x h x w
@@ -91,15 +92,19 @@ def _topk(scores, K=40):
 '''
 def _topk_channel(scores, K=40):
       batch, cat, height, width = scores.size()
-      
+      ###scores.view(batch, cat, -1)类似于resize函数，将shape变为（batch，cat，height*width）
+      ###topk(tensor, largest, sort)默认取最大的k个，并将输入排序
+      ###此处的topk相当于在每张图片每个通道（即类别）的hm上分别找到k个最大scores
       topk_scores, topk_inds = torch.topk(scores.view(batch, cat, -1), K)
-
+      ####找到这些points的相对位置（相对于scores.view()后的最后一维）
       topk_inds = topk_inds % (height * width)
+      ####找到这些points的y坐标
       topk_ys   = (topk_inds / width).int().float()
+      ####找到这些points的x坐标
       topk_xs   = (topk_inds % width).int().float()
 
       return topk_scores, topk_inds, topk_ys, topk_xs
-
+####与上一个函数很类似，但增加了一些内容
 def _topk(scores, K=40):
     batch, cat, height, width = scores.size()
       
@@ -108,11 +113,21 @@ def _topk(scores, K=40):
     topk_inds = topk_inds % (height * width)
     topk_ys   = (topk_inds / width).int().float()
     topk_xs   = (topk_inds % width).int().float()
-      
+    ####此处以上部分和上一个函数完全一致
+
+
+    #####将topk_scores形状由(batch, cat, topk)----->(batch, cat*topk)
+    #####再在最后一维上找到k个最大值（即每张图片分别取k个最大值，在上一步的基础上）
+    #####topk_ind的shape为（batch, k）
     topk_score, topk_ind = torch.topk(topk_scores.view(batch, -1), K)
+
+    ####获得每一个峰值分别对应于哪个类别
     topk_clses = (topk_ind / K).int()
+    ####topk_inds.view(batch, -1, 1)将topk_inds的形状由（batch, k）----->
+    ####(batch, k)
     topk_inds = _gather_feat(
         topk_inds.view(batch, -1, 1), topk_ind).view(batch, K)
+    ####将topk_ys和topk_xs的shape变为（batch, k）
     topk_ys = _gather_feat(topk_ys.view(batch, -1, 1), topk_ind).view(batch, K)
     topk_xs = _gather_feat(topk_xs.view(batch, -1, 1), topk_ind).view(batch, K)
 
@@ -133,7 +148,8 @@ def agnex_ct_decode(
     r_heat  = torch.sigmoid(r_heat)
     ct_heat = torch.sigmoid(ct_heat)
     '''
-    if aggr_weight > 0: 
+    if aggr_weight > 0:
+    ####好像是在做center pooling???
       t_heat = _h_aggregate(t_heat, aggr_weight=aggr_weight)
       l_heat = _v_aggregate(l_heat, aggr_weight=aggr_weight)
       b_heat = _h_aggregate(b_heat, aggr_weight=aggr_weight)
@@ -151,15 +167,17 @@ def agnex_ct_decode(
     b_heat[b_heat > 1] = 1
     r_heat[r_heat > 1] = 1
 
+    ####shape均为（batch, k）,省略的是cls
     t_scores, t_inds, _, t_ys, t_xs = _topk(t_heat, K=K)
     l_scores, l_inds, _, l_ys, l_xs = _topk(l_heat, K=K)
     b_scores, b_inds, _, b_ys, b_xs = _topk(b_heat, K=K)
     r_scores, r_inds, _, r_ys, r_xs = _topk(r_heat, K=K)
-      
+
+    ####这里ct_heat_agn和ct_clses的shape均为（batch, 1）
     ct_heat_agn, ct_clses = torch.max(ct_heat, dim=1, keepdim=True)
       
     # import pdb; pdb.set_trace()
-
+    ####左上和右下角点坐标shape变为（batch, k, k, k, k）
     t_ys = t_ys.view(batch, K, 1, 1, 1).expand(batch, K, K, K, K)
     t_xs = t_xs.view(batch, K, 1, 1, 1).expand(batch, K, K, K, K)
     l_ys = l_ys.view(batch, 1, K, 1, 1).expand(batch, K, K, K, K)
@@ -169,21 +187,26 @@ def agnex_ct_decode(
     r_ys = r_ys.view(batch, 1, 1, 1, K).expand(batch, K, K, K, K)
     r_xs = r_xs.view(batch, 1, 1, 1, K).expand(batch, K, K, K, K)
 
+    ###获得各batch中k个最大值点的中心坐标
     box_ct_xs = ((l_xs + r_xs + 0.5) / 2).long()
     box_ct_ys = ((t_ys + b_ys + 0.5) / 2).long()
 
+    ###ct_inds的作用是什么？？？中心点的索引？？形状变为（batch, -1）
     ct_inds     = box_ct_ys * width + box_ct_xs
     ct_inds     = ct_inds.view(batch, -1)
+    ###ct_heat_agn???
     ct_heat_agn = ct_heat_agn.view(batch, -1, 1)
     ct_clses    = ct_clses.view(batch, -1, 1)
     ct_scores   = _gather_feat(ct_heat_agn, ct_inds)
     clses       = _gather_feat(ct_clses, ct_inds)
 
+    ###左上和右下角点的scores形状变为（batch, k, k, k, k）
     t_scores = t_scores.view(batch, K, 1, 1, 1).expand(batch, K, K, K, K)
     l_scores = l_scores.view(batch, 1, K, 1, 1).expand(batch, K, K, K, K)
     b_scores = b_scores.view(batch, 1, 1, K, 1).expand(batch, K, K, K, K)
     r_scores = r_scores.view(batch, 1, 1, 1, K).expand(batch, K, K, K, K)
     ct_scores = ct_scores.view(batch, K, K, K, K)
+    ####得到的score为各个scores的平均值
     scores    = (t_scores + l_scores + b_scores + r_scores + 2 * ct_scores) / 6
 
     # reject boxes based on classes
@@ -461,37 +484,48 @@ def ddd_decode(heat, rot, depth, dim, wh=None, reg=None, K=40):
       
     return detections
 
+####核心函数，包括对heatmamps进行NMS, 作用是将得到的hms根据给定的topk值得到
+####预测结果[bboxes, scores, clses]
 def ctdet_decode(heat, wh, reg=None, cat_spec_wh=False, K=100):
+    ####
     batch, cat, height, width = heat.size()
 
     # heat = torch.sigmoid(heat)
+    ###hm也是要做nms的
     # perform nms on heatmaps
     heat = _nms(heat)
-      
+    ###在hms中选出前k个最大的scores值, 及其索引，对应类别，位置
     scores, inds, clses, ys, xs = _topk(heat, K=K)
+    ####是否进行坐标offset回归
     if reg is not None:
       reg = _tranpose_and_gather_feat(reg, inds)
       reg = reg.view(batch, K, 2)
+      ###对每一个坐标值加上回归offset
       xs = xs.view(batch, K, 1) + reg[:, :, 0:1]
       ys = ys.view(batch, K, 1) + reg[:, :, 1:2]
     else:
       xs = xs.view(batch, K, 1) + 0.5
       ys = ys.view(batch, K, 1) + 0.5
     wh = _tranpose_and_gather_feat(wh, inds)
+    ####是否对于每一类都预测wh
     if cat_spec_wh:
       wh = wh.view(batch, K, cat, 2)
       clses_ind = clses.view(batch, K, 1, 1).expand(batch, K, 1, 2).long()
+      ###对wh预测值重新组织，得到每一个类别对应的wh预测值，wh最终shape为（batch, k, 2）
+      ###即为这k个scores对应的宽和高
       wh = wh.gather(2, clses_ind).view(batch, K, 2)
     else:
       wh = wh.view(batch, K, 2)
     clses  = clses.view(batch, K, 1).float()
     scores = scores.view(batch, K, 1)
+    ###bboxes为预测的bboxes
     bboxes = torch.cat([xs - wh[..., 0:1] / 2, 
                         ys - wh[..., 1:2] / 2,
                         xs + wh[..., 0:1] / 2, 
                         ys + wh[..., 1:2] / 2], dim=2)
     detections = torch.cat([bboxes, scores, clses], dim=2)
-      
+    ####返回预测结果[bboxes, scores, clses], detections的shape为(batch, k, 6)
+    ####6：bbox, cls, score
     return detections
 
 def multi_pose_decode(
