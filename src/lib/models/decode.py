@@ -498,6 +498,9 @@ def ctdet_decode(heat, wh, reg=None, cat_spec_wh=False, K=100):
     scores, inds, clses, ys, xs = _topk(heat, K=K)
     ####是否进行坐标offset回归
     if reg is not None:
+	  ####_tranpose_and_gather_feat函数从输出的reg(batch, w, h, 2)中根据
+	  ####inds选出k个hm score最大值所在位置的k对reg(batch, k, 2)
+	  ####若为cat_spec_off, 则reg由(batch, c, w, h, 2)---->(batch, k, 2)
       reg = _tranpose_and_gather_feat(reg, inds)
       reg = reg.view(batch, K, 2)
       ###对每一个坐标值加上回归offset
